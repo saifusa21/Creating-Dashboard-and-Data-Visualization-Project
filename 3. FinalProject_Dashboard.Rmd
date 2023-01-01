@@ -1,0 +1,141 @@
+---
+title: "Insurance Fraud Dashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(flextable)
+library(stringr)
+library(lubridate)
+
+library(data.table)
+library(skimr)
+library(ggthemes)
+library(broom)
+library(boot)
+library(dataMeta)
+
+set.seed(1994)
+```
+
+```{r, include = FALSE, eval = TRUE}
+# Importing CSV file
+claimRawData <- fread("Claim.csv")
+demographicRawData <- fread("Demographics.csv")
+fraudRawData <- fread("Fraud.csv")
+policyRawData <- fread("Policy.csv")
+vehicleRawData <- fread("Vehicle.csv")
+
+# Replacing Missing data indicators with NA
+claimRawData <- claimRawData %>%
+  mutate(across(where(is.character), ~na_if(., "?"))) %>%
+  mutate(across(where(is.character), ~na_if(., "MISSINGVALUE")))%>%
+  mutate(across(where(is.character), ~na_if(., "MISSEDDATA")))
+
+claimRawData$AmountOfTotalClaim <- as.numeric(claimRawData$AmountOfTotalClaim)
+
+policyRawData <- policyRawData %>%
+  mutate(across(where(is.character), ~na_if(., "MISSINGVAL")))
+
+vehicleRawData <- vehicleRawData %>%
+  mutate(across(where(is.character), ~na_if(., "???")))
+
+
+# Creating merged data set
+
+mergedData <- policyRawData %>% 
+  inner_join(fraudRawData, by = c("CustomerID" = "CustomerID")) %>%
+  mutate(IsFraud = if_else(ReportedFraud=="N",
+                           str_replace(ReportedFraud, "N", "No"),
+                           str_replace(ReportedFraud, "Y", "Yes"))) %>%
+  mutate(CoverageYear = year(DateOfPolicyCoverage)) %>%
+  select(Policy_Deductible, CoverageYear, IsFraud)
+
+
+### Summary table
+
+# Fraud Summary By Year
+
+fraudSummary <- mergedData %>% group_by(CoverageYear, IsFraud) %>% 
+  count() %>%
+  mutate(Range=case_when(CoverageYear < 1996 ~ "1990-1995",
+                         CoverageYear < 2001 ~ "1996-2000",
+                         CoverageYear < 2006 ~ "2001-2005",
+                         CoverageYear < 2011 ~ "2006-2010",
+                         TRUE ~ "2011-2015")) %>%
+  group_by(Range, IsFraud) %>%
+  summarise(Average = mean(n, na.rm = TRUE),
+             Median = median(n, na.rm = TRUE),
+             Min = min(n, na.rm = TRUE),
+             Max = max(n, na.rm = TRUE)) %>% 
+  mutate(across(Average:Max, ~ round(.x, 3))) %>% 
+  arrange(desc(Average))
+
+fraudSummary
+
+```
+
+```{r}
+# Creating histogram of Policy deductable vs fraud
+
+ggScatter <- mergedData %>% ggplot(aes(x=IsFraud, y=Policy_Deductible, fill=IsFraud)) +
+  ggdist::stat_halfeye(adjust = .5, width = 2*.3, .width = c(0.5, 1)) + 
+    geom_boxplot(width = .3, outlier.shape = NA) +
+
+    coord_flip() +
+    labs(x = "Insurance Fraud",
+         y = "Policy Deductible (USD)") + 
+  theme_bw() +
+  theme(legend.position = "none")
+
+
+# Creating bar chart of Fraud frequency by Years
+
+mergedData$CoverageYear = as.factor(mergedData$CoverageYear)
+
+ggBar <- mergedData %>%
+  ggplot(aes(x = CoverageYear, fill=CoverageYear)) + 
+    geom_bar() +
+    facet_grid(.~IsFraud) +
+    labs(title = "",
+         y = "Number of Incidents",
+         x = "Year",
+         caption = "") +
+    theme_minimal() + 
+    theme(legend.position = "none",
+          axis.text.x = element_text(angle = 90,
+                                   vjust = 0.8,
+                                   hjust = 0.9))
+
+
+```
+
+Row {data-height=650}
+-------------------------------------
+
+### Number of Incidents by Year, Faceted by Fraud status
+
+```{r}
+ggBar
+```
+
+
+   
+### Comparision of Frauds by Policy Deductible (USD)
+
+```{r}
+ggScatter
+```   
+
+Row {data-height=650}
+-------------------------------------
+
+### Fraud by Year Statistics
+
+```{r}
+fraudSummary %>% flextable::flextable()
+```

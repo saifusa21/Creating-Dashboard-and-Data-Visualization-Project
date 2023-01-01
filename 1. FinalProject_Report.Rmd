@@ -1,0 +1,654 @@
+---
+title: "Final Project: Data Analysis and Visualization on Insurance Fraud DataSets"
+author: "Abu, Sayed, Saheli"
+date: "12/11/2022"
+output: 
+  prettydoc::html_pretty:
+  theme: architect
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## Abstract
+
+In this project, we analyzed the datasets named **Claim**, **Demographic**, **Policy**, **Vehicle** and **Fraud** from the datasets of **Insurance Fraud** and implemented the tasks that were asked as the deliverable for the final project. We chose these data sets to analyze because we felt that we can apply the techniques which were learned from the activites throughout the semester and we were finally able to apply those techniques in this project. 
+
+## Background
+
+For the analysis report, we created 5 distinct type of ggplot visualizations which are mixture of visualizing quantitative and categorical variables, a couple of tables of summary statistics which were obtained using group-wise operations. To do these, we merged the necessary datasets. In addition, the claim dataset was pivoted from wide format to long format to analize the dmage claim amount. The date time variable of our dataset was manipulated by using lubridate functions and one string variable was manipulated by using stringr functions as per the deliverable of this project. We implemented permutation test based on a traditional hypothesis test to see if the average amount of vehicle damage differs by insured gender using an F test. Apart from that, we obtained a parametric and nonparametric bootstrap to estimate standard errors and distribution for the sample median. Finally, we created a dictionary showcasing the variables that were used in our analysis. Apart from the analysis report, we created a dashboard using the flexdashboard package showing few visualizations and summary table as a separate deliverable of this project.          
+
+### Packages
+
+We used the below packages for our analysis:
+
+```{r packages}
+
+library(data.table)
+library(tidyverse)
+library(skimr)
+library(ggthemes)
+library(broom)
+library(boot)
+library(dataMeta)
+library(stringr)
+library(lubridate)
+```
+
+
+```{r Importing Dataset, echo=FALSE}
+
+# Let's import the dat sets using `fread()`:
+
+claimRawData <- fread("Claim.csv")
+demographicRawData <- fread("Demographics.csv")
+fraudRawData <- fread("Fraud.csv")
+policyRawData <- fread("Policy.csv")
+vehicleRawData <- fread("Vehicle.csv")
+
+```
+
+### Summary of Variables and Exploratory Data Analysis
+
+The dataset depicts the details of the auto insurance claim, like, the fraud details, policy details, vehicle details, claim details and also the customer demographic information etc. But, we used only claim details and the customer demographic information to fulfill the deliverables for this project. The information about attributes are mentioned below:
+
+Claim Information :
+
+• CustomerID : Customer ID
+
+• DateOfIncident : Date of incident
+
+• TypeOfIncident : Type of incident
+
+• TypeOfCollission : Type of Collision - “?” is the missing value
+
+• SeverityOfIncident : Collision severity
+
+• AuthoritiesContacted : Which authorities are contacted
+
+• IncidentState : Incident location (State)
+
+• IncidentCity : Incident location (City)
+
+• IncidentAddress : Incident location (address)
+
+• IncidentTime : time of incident – Hour of the day - the missing value is represented as “-5”
+
+• NumberOfVehicles : Number of vehicles involved
+
+• PropertyDamage : If property damage is there - “?” is the missing value
+
+• BodilyInjuries : Number of bodily injuries
+
+• Witnesses : Number of witnesses - missing value is represented as "MISSINGVALUE"
+
+• PoliceReport : If police report available - “?” is the missing value
+
+• AmountOfTotalClaim : Total claim amount - the missing value is represented as “MISSEDDATA”
+
+• AmountOfInjuryClaim : Claim for injury
+
+• AmountOfPropertyClaim : claim for property damage
+
+• AmountOfVehicleDamage : claim for vehicle damage
+
+The dataset indicates missing data with **"?"**, **"-5"**, **"MISSINGVALUE"**, **"MISSEDDATA"**. We replaced those with **"NA"**.
+
+```{r Replacing missing  claim data indicators with NA, echo=FALSE}
+
+claimRawData <- claimRawData %>%
+  mutate(across(where(is.character), ~na_if(., "?"))) %>%
+  mutate(across(where(is.character), ~na_if(., "MISSINGVALUE")))%>%
+  mutate(across(where(is.character), ~na_if(., "MISSEDDATA")))
+
+claimRawData$AmountOfTotalClaim <- as.numeric(claimRawData$AmountOfTotalClaim)
+```
+
+```{r Claim Dataset, echo=FALSE}
+
+# Let's explore the Claim Data set:
+
+glimpse(claimRawData)
+skim(claimRawData)
+```
+
+In Claim data set, arround **35%** data is missing for the variables named **PropertyDamage** and **PoliceReport**.
+
+Demographics Data :
+
+• CustomerID : Customer ID
+
+• InsuredAge : age
+
+• InsuredZipCode : Zip Code
+
+• InsuredGender : Gender - the missing value is represented as “NA”
+
+• InsuredEducationLevel : Education
+
+• InsuredOccupation : Occupation
+
+• InsuredHobbies : Hobbies
+
+• CapitalGains : Capital gains(Financial Status)
+
+• CapitalLoss : capital loss(Financial Status)
+
+• Country : Country
+
+```{r Demographic Dataset, echo=FALSE}
+
+# Let's explore the Demographic Data set:
+
+glimpse(demographicRawData)
+skim(demographicRawData)
+```
+
+In the Demographic data set, only the variable named **InsuredGender** has 30 missing values which is only **0.1 %** of overall data. 
+
+Policy Information :
+
+• CustomerID : Customer ID
+
+• CustomerLoyaltyPeriod : Duration of customer relationship
+
+• InsurancePolicyNumber : policy number
+
+• DateOfPolicyCoverage : policy commencement date
+
+• InsurancePolicyState : Policy location (State)
+
+• Policy_CombinedSingleLimit : Split Limit and Combined Single Limit
+
+• Policy_Deductible : Deductible amount
+
+• PolicyAnnualPremium : Annual Premium – the missing value is represented as “-1”
+
+• UmbrellaLimit : Umbrella Limit amount
+
+• InsuredRelationship : Realtionship
+
+• TotalCharges : Customer account information (Total). ( For this attribute, missing values are denoted as “MISSINGVAL” also)
+
+• DOE : Date of entry as customer
+
+• ElectronicBilling : Customer account information - whether electronic billing
+
+• ContractType : Contract type ( For this attribute, missing values are denoted as “NA”)
+
+• PaymentMethod : payment method
+
+
+The dataset indicates missing data with **"-1"**, **"MISSINGVAL"**. We replaced those with **"NA"**.
+
+```{r Replacing missing policy data indicators with NA, echo=FALSE}
+
+policyRawData <- policyRawData %>%
+  mutate(across(where(is.character), ~na_if(., "MISSINGVAL")))
+```
+
+```{r Policy Dataset, echo=FALSE}
+
+# Let's explore the Policy Data set:
+
+glimpse(policyRawData)
+skim(policyRawData)
+```
+
+After analyzing the Policy dataset, we noticed that there is no missing value though it was mentioned in the summary of attributes that the variable named "PolicyAnnualPremium" has the missing value which is represented as “-1”.  
+
+Vehicle Data:
+
+• CustomerID : Customer ID
+
+• VehicleAttribute : Service signed for
+
+• VehicleAttributeDetails : Value of the vehicle attribute - the missing value is represented as “???”
+
+
+The dataset indicates missing data with **"???"**. We replaced those with **"NA"**.
+
+```{r Replacing missing vehicle data indicators with NA, echo=FALSE}
+
+vehicleRawData <- vehicleRawData %>%
+  mutate(across(where(is.character), ~na_if(., "???")))
+```
+
+```{r Vehicle Dataset, echo=FALSE}
+
+# Let's explore the Vehicle Data set:
+
+glimpse(vehicleRawData)
+skim(vehicleRawData)
+```
+
+In the Vehicle data set, only the variable named **VehicleAttributeDetails** has 50 missing values which is only **0.1 %** of overall data. 
+
+Fraud Data :
+
+• CustomerID : Customer ID
+
+• ReportedFraud : Fraud or not – Target
+
+```{r Fraud Dataset, echo=FALSE}
+
+# Let's explore the Fraud Data set:
+
+glimpse(fraudRawData)
+skim(fraudRawData)
+```
+
+There is no missing data in the Fraud dataset.
+
+
+### Data Dictionary
+
+Let's create a data dictionary showcasing the variables used in our analysis:
+
+```{r data dictionary, echo=FALSE}
+
+# Merging two data set for which a dictionary will be made
+usedData <- claimRawData %>% 
+  inner_join(demographicRawData, by = c("CustomerID" = "CustomerID")) %>% 
+  select(CustomerID, DateOfIncident, TypeOfIncident, TypeOfCollission, SeverityOfIncident, InsuredGender, AmountOfTotalClaim, AmountOfInjuryClaim, AmountOfPropertyClaim, AmountOfVehicleDamage)
+
+data("usedData")
+my.usedData <- usedData
+
+# Linker: Add description for each variable names and variable type
+variable_description <- c("Customet Identification Number", "Date of Incident", "Type of Incident", "Type of Collission", "Severity of Incident", "Gender of Auto Insurance Holder", "The Amount of Total Claim", "The Amount of Injury Claim", "The Amount of Property Claim", "The Amount of Vehicle Damage")
+
+variable_type <- c("0", "0", "0", "0", "0", "0", "0", "0", "0", "0")
+
+linker <- build_linker(my.data = my.usedData, variable_description = variable_description, variable_type = variable_type)
+
+# Data dictionary
+dictionary <- build_dict(my.data = my.usedData, linker = linker, option_description = NULL, prompt_varopts = FALSE)
+
+# Adding a column
+dictionary$variable_type <- c("int", "int", "chr", "int", "chr", "date", "chr", "chr", "chr", "chr")
+
+dictionary %>% select(variable_name, variable_description, variable_type)
+
+```
+
+
+## Data Visualization with Results
+
+### Table of Summary Statistics by merging the necessary tables
+
+```{r Summary Statistics, echo=FALSE}
+
+# Frequency table showing the cross-section of two categorical variables
+
+claimRawData %>% group_by(TypeOfIncident, TypeOfCollission) %>% count()
+
+# Creating merged data set
+
+mergedData <- policyRawData %>% 
+  inner_join(fraudRawData, by = c("CustomerID" = "CustomerID")) %>%
+  mutate(IsFraud = if_else(ReportedFraud=="N",
+                           str_replace(ReportedFraud, "N", "No"),
+                           str_replace(ReportedFraud, "Y", "Yes"))) %>%
+  mutate(CoverageYear = year(DateOfPolicyCoverage)) %>%
+  select(Policy_Deductible, CoverageYear, IsFraud)
+
+# Fraud Summary By Year
+
+fraudSummary <- mergedData %>% group_by(CoverageYear, IsFraud) %>% 
+  count() %>%
+  mutate(Range=case_when(CoverageYear < 1996 ~ "1990-1995",
+                         CoverageYear < 2001 ~ "1996-2000",
+                         CoverageYear < 2006 ~ "2001-2005",
+                         CoverageYear < 2011 ~ "2006-2010",
+                         TRUE ~ "2011-2015")) %>%
+  group_by(Range, IsFraud) %>%
+  summarise(Average = mean(n, na.rm = TRUE),
+             Median = median(n, na.rm = TRUE),
+             Min = min(n, na.rm = TRUE),
+             Max = max(n, na.rm = TRUE)) %>% 
+  mutate(across(Average:Max, ~ round(.x, 3))) %>% 
+  arrange(desc(Average))
+
+fraudSummary
+```
+
+
+### ggplot Visualizations
+
+Let's analyze Damage claim amounts and to do this let's **pivot** the dataset first to obtain the below distribution of different claim amounts:
+
+```{r ggplot1, echo=FALSE}
+
+# 
+graphData <- claimRawData %>% 
+  select(AmountOfTotalClaim, AmountOfInjuryClaim, AmountOfPropertyClaim, AmountOfVehicleDamage) %>%
+  pivot_longer(cols = c(AmountOfTotalClaim, AmountOfInjuryClaim, AmountOfPropertyClaim, AmountOfVehicleDamage),
+               names_to = "ClaimTypes",
+               values_to = "ClaimAmount")
+
+# Distribution of different Claim Amounts
+graphData %>% ggplot(aes( y = ClaimAmount, 
+                          x = ClaimTypes,
+                          fill = ClaimTypes)) +
+  geom_boxplot() +
+  labs(y = "Claim Amount (USD)",
+    title = "Distribution of different Claim Amounts",
+    caption = "Data Source : Kaggle.com/datases") + 
+  theme_bw() +
+  theme(legend.position = "none",
+        text = element_text(face = "bold"),
+        axis.text.x = element_text(angle = -20,
+                                   size = 7,
+                                   vjust = .7)) +
+  scale_color_viridis_d()
+```
+
+From the above boxplot, we can see that the amount of injury claim and the amount of property claim is similar and low whereas, the amount of total claim and the amount of vehicle claim quite high. 
+
+
+```{r ggplot2, echo=FALSE}
+
+graphData <- claimRawData %>% group_by(DateOfIncident) %>% count() %>%
+   mutate (year(DateOfIncident))
+
+# Number of daily accidents time series
+graphData %>% ggplot(aes(x = DateOfIncident, y = n)) +
+  geom_line() + 
+  labs(y = "Number of Accident",
+       x = "Date of Accident",
+    title = "Number of daily accidents time series",
+    caption = "Data Source : Kaggle.com/datases") +
+  
+  scale_color_viridis_d()
+
+```
+
+From the time series plot for number of daily accidents, we can see that in the first week of January, third week of January and in the end week of February the number of accidents were at the peak. From starting of the month March, the number of accidents started decreasing.
+
+
+Now, let's merge the claim data and demographic data to see the distribution of incident severity by sex: 
+
+```{r ggplot3, echo=FALSE}
+
+graphData <- claimRawData %>% 
+  inner_join(demographicRawData, by = c("CustomerID" = "CustomerID")) %>% 
+  select(SeverityOfIncident, InsuredGender)
+
+
+graphData %>% filter(!is.na(SeverityOfIncident), !is.na(InsuredGender)) %>%
+  ggplot(aes(x=fct_relevel(SeverityOfIncident,"Trivial Damage", "Major Damage", "Total Loss", "Minor Damage"),
+             fill=SeverityOfIncident)) +
+  labs(title="Distribution of Incident Severity for Sex",
+       x="Incident Severity",
+       y="Count",
+       caption = "Data Source : Kaggle.com/datases") +
+  facet_grid(.~InsuredGender) +
+  scale_fill_viridis_d() +
+  geom_bar(color="black") +
+  coord_flip() +
+  theme_bw() +
+  scale_color_viridis_d() +
+  theme(legend.position = "none")
+
+```
+
+From the above side-by-side bar charts we can that the accident rate is higher among female than male for all types of incidents i.e. Trivial, minor, major and total.
+
+```{r ggplot4, echo=FALSE}
+
+# Creating histogram of Policy deductable vs fraud
+
+ggScatter <- mergedData %>% ggplot(aes(x=IsFraud, y=Policy_Deductible, fill=IsFraud)) +
+  ggdist::stat_halfeye(adjust = .5, width = 2*.3, .width = c(0.5, 1)) + 
+    geom_boxplot(width = .3, outlier.shape = NA) +
+
+    coord_flip() +
+    labs(x = "Insurance Fraud",
+         y = "Policy Deductible (USD)") + 
+  theme_bw() +
+  theme(legend.position = "none")
+
+ggScatter
+
+```
+
+From the above plot we can see that for Insurance Fraud "yes", the policy amount is deducted the most. Whereas, for Insurance Fraud "no", the policy deductable amount is less.
+
+```{r ggplot5, echo=FALSE}
+
+# Creating bar chart of Fraud frequency by Years
+
+mergedData$CoverageYear = as.factor(mergedData$CoverageYear)
+
+ggBar <- mergedData %>%
+  ggplot(aes(x = CoverageYear, fill=CoverageYear)) + 
+    geom_bar() +
+    facet_grid(.~IsFraud) +
+    labs(title = "",
+         y = "Number of Incidents",
+         x = "Year",
+         caption = "") +
+    theme_minimal() + 
+    theme(legend.position = "none",
+          axis.text.x = element_text(angle = 90,
+                                   vjust = 0.8,
+                                   hjust = 0.9))
+
+ggBar
+
+```
+
+From the above plot, we can see that for IsFraud = Yes i.e. where the policy was claimed without any accident, the number of incidents was high in the year 2001 followed by year 2002. The number of incidents were low for the year 2014 followed by 1990. After year 1990, the number of incidents were increasing till year 1994 after that it was decreased little bit in year 1995.
+For IsFraud = No, i.e. where policy was claimed for a authentic reason, the number of incidents were high in year 1999 followed by 1995. For year 2001, 2002, 2004 to 2008 the number of incidents were pretty high. Whereas, the number of incidents were at the least in year 2015. Also, we can see that after year 2008, the number of incidents started decreasing.
+
+### Permutation test based on a traditional hypothesis test
+```{r permutation test, echo=FALSE}
+set.seed(1994)
+
+# Merging two data set to compare insured gender and amount of vehicle damage based on an F-test --------------------------
+mergedData <- claimRawData %>% 
+  inner_join(demographicRawData, by = c("CustomerID" = "CustomerID")) %>% 
+  select(InsuredGender, AmountOfVehicleDamage)
+
+mergedData <- mergedData %>% filter(!is.na(AmountOfVehicleDamage), !is.na(InsuredGender))
+
+# Here we are using a permutation test to see if the average amount of vehicle damage differs by insured gender using an F test
+
+
+# Fitting One-Way ANOVA model
+modFit <- aov(AmountOfVehicleDamage ~ InsuredGender, data = mergedData)
+Fstatistic <- modFit %>% tidy() %>% slice_head(n = 1) %>% pull(statistic)
+
+# Randomization test: InsuredGender is the grouping variable and AmountOfVehicleDamage is our response variable
+# For randomization test, we permute the individuals across the groups 
+
+# Getting number of each individuals in each group
+groupCounts <- mergedData %>% count(InsuredGender)
+#groupCounts
+
+# Overall sample size
+N <- nrow(mergedData)
+
+# Number of permutations
+nperms <- 1000
+
+# Instantiating vector for test statistics
+permFs <- vector(length = nperms)
+
+# Create vector of group memberships of individuals
+groups <- rep(groupCounts$InsuredGender, times = groupCounts$n)
+
+for(p in 1:nperms) {
+# Permute individuals keeping group sizes the same as in original data
+permData <- mergedData %>% mutate(InsuredGender = groups[sample(1:N, size = N, replace = FALSE)])
+
+# Calculate F test statistic for each permutation
+modFit <- aov(AmountOfVehicleDamage ~ InsuredGender, data = permData)
+permFs[p] <- modFit %>% tidy() %>% slice_head(n = 1) %>% pull(statistic)
+}
+```
+F: `r Fstatistic`; P-value: `r permFs[p]` 
+Q: Do we reject or fail to reject Null Hypothesis?
+A: Since the p-value of `r permFs[p]` is smaller than 0.05, we reject Null Hypothesis. 
+We have sufficient evidence at the 5% significance level that the average amount of vehicle damage differs by insured gender 
+(F = `r Fstatistic`).
+
+### Bootstraping 
+Let's perform **Non-parametric** Bootstrap first:
+```{r non-parametric, echo=FALSE}
+
+set.seed(1989)
+n=nrow(mergedData)
+
+# Converting to numeric
+vehicleDamage <- as.numeric(mergedData$AmountOfVehicleDamage)
+
+# Normalizing
+# vehicleDamage <- rnorm(vehicleDamage, mean = 0, sd =1)
+
+# Number of bootstrap samples
+B <- 1000
+
+# Instantiating matrix for bootstrap samples
+boots <- matrix(NA, nrow = n, ncol = B)
+
+# Sampling with replacement B times
+for(b in 1:B) {
+boots[, b] <- vehicleDamage[sample(1:n, size = n, replace = TRUE)]
+}
+
+# Using the generated bootstrap samples, create a bootstrap distribution of sample medians, and visualize this distribution using a histogram.
+
+
+# initializing a vector for bootstrap samples 
+bootMedians <- vector(length = B )
+
+for(b in 1:B) {
+bootMedians[b] <- median(boots[,b])
+}
+
+# Creating Histogram 
+tibble(Median = bootMedians) %>% ggplot(aes(x = Median)) + 
+  geom_histogram(color = "white") + 
+  labs(title = "Bootstrap distribution of Medians ", y = "Frequency")+
+  theme_bw()
+
+# Non-parametric estimates of the SE of the sample medians 
+SEestimate <- sd(bootMedians)
+#SEestimate
+# use the bootstrap samples to obtain a nonparametric 95% confidence interval for the population 
+lowerBoundMed <-  quantile(bootMedians, probs = 0.025)
+upperBoundMed <-  quantile(bootMedians, probs = 0.975)
+
+# Creating Histogram with vline
+
+tibble(Median = bootMedians) %>% ggplot(aes(x = Median)) + 
+  geom_histogram(color = "white") + 
+  geom_vline(xintercept = lowerBoundMed,
+             color = "dodgerblue", linetype = "solid")+
+  geom_vline(xintercept = upperBoundMed,
+             color = "dodgerblue", linetype = "solid")+
+  labs(title = "Distribution of Bootstrap medians ", y = "Frequency")+
+  theme_bw()
+```
+
+We are 95% confident that the true median for these distribution is between `r round(lowerBoundMed) ` and `r round(upperBoundMed)` . 
+
+
+Now, let's perform the **Parametric** Bootstrap: 
+
+```{r parametric, echo=FALSE}
+
+# Generating 1,000 samples from a normal distribution using the estimated mean and standard deviation from the vehicleDamage data set, and visualize this distribution using a histogram.
+
+B <- 1000
+
+# Instantiating matrix for bootstrap samples
+paramBoots <- matrix(NA, nrow = n, ncol = B)
+Xbar <- mean(vehicleDamage)
+s <- sd(vehicleDamage)
+
+# Simulating a normal set of n values, B times 
+
+for(b in 1:B) {
+paramBoots[, b] <- rnorm(n = n, mean = Xbar, sd = s )
+}
+
+
+# Initializing vector for bootstrap medians 
+bootParaMedians <- vector(length = B )
+
+
+# Calculating median for each simulated data set 
+for(b in 1:B) {
+bootParaMedians[b] <- median(paramBoots[,b])
+}
+
+
+# Parametric estimates of the SE of the sample medians 
+SEparamEstimate <- sd(bootParaMedians)
+#SEparamEstimate
+# use the bootstrap samples to obtain a nonparametric 95% confidence interval for the population 
+lowerBoundParaMed <-  quantile(bootParaMedians, probs = 0.025)
+upperBoundParaMed <-  quantile(bootParaMedians, probs = 0.975)
+
+# Creating Histogram with vline
+tibble(Median = bootParaMedians) %>% ggplot(aes(x = Median)) + 
+  geom_histogram(color = "white") + 
+   geom_vline(xintercept = lowerBoundParaMed,
+             color = "dodgerblue", linetype = "solid")+
+  geom_vline(xintercept = upperBoundParaMed,
+             color = "dodgerblue", linetype = "solid")+
+  labs(title = "Distribution of Parametric Bootstrap medians ", y = "Frequency")+
+  theme_bw()
+
+```
+
+
+
+We are 95% confident that the true median for these distribution is between `r round(lowerBoundParaMed)` and `r round(upperBoundParaMed)`.
+
+
+
+## Conclusion
+
+Finally, from all the plots, we can conclude that most of the accidents were done by females over males. They have done most of the minor accidents. The most of the accidents took place between January and February and at the starting of month March it got decreased. But surprisingly end of January the accident rate was less. Apart from these observations we have seen that most of the claims are approached for total damage followed by other vehicle damages. Also most of the authentic incidents took place in 1999 followed by 1995 and between year 2004 and 2008 the rate was also pretty high and after year 2008 it started decreasing. Whereas, most of the fraud accidents took place in year 2001 and 2002.         
+
+
+## References
+
+1. https://www.kaggle.com/datasets/?search=insurance-fraud
+
+2. https://rdrr.io/cran/dataMeta/man/build_linker.html
+
+3. https://docs.google.com/document/d/1pLFDA0JZUCuGNvpsqRgNhs3KI9DHD8kFtZbvEpd9TdM/edit?usp=sharing
+
+4. https://docs.google.com/document/d/1APSWLqQ_8Wy_mUR3afg9mZbif3YiFCR94uhg8i7D3_g/edit?usp=sharing
+
+5. https://docs.google.com/document/d/1COab_YbF0gDdWz02UDjVCegB9lbkDQgOC3IkvDfroR0/edit?usp=sharing
+
+6. https://docs.google.com/document/d/16UeY3X8I7rJElITIUm2SWhfKy3WQWiV6gZYZrJzfepk/edit?usp=sharing
+
+7. https://docs.google.com/document/d/1WYPmd750r2ojAiEljpogzqdVG_HPbIK_/edit?usp=sharing&ouid=117678942095329132446&rtpof=true&sd=true
+
+8. https://docs.google.com/document/d/1uFDe5rddt23xqcnuRgg4RSaODQGtg2PwnYmjPRO9ib4/edit?usp=sharing
+
+9. https://docs.google.com/document/d/1xKrR-b9o-GcXzuf3k_aOSr_hJXp4RiJx/edit?usp=sharing&ouid=117678942095329132446&rtpof=true&sd=true
+
+10. https://docs.google.com/document/d/1U-pMTx_HA002arktw9Az6P_r0lP1pseNQ-s6OoyoA88/edit?usp=sharing
+
+11. https://docs.google.com/document/d/17mavgAogTYiZFy8sscdxCdkuQIonhRiAIQhLdlf6cmw/edit?usp=sharing
+
+12. https://docs.google.com/document/d/1CpsVoPgtesTFnwjmyJ3wd1RBg2QaRJcl52q3pGoULU4/edit?usp=sharing
+
+13. https://docs.google.com/document/d/1Xet7QNikLWmsNb3CRSuMX2ve_debbkbq_L17jd_YDWE/edit?usp=sharing
+
+14. https://docs.google.com/document/d/1fqWpnIU4OIgmo4BGwcLNYrdLIBsBPByL/edit?usp=sharing&ouid=117678942095329132446&rtpof=true&sd=true
+
+15. https://docs.google.com/document/d/1K6fARfGLVog9sM3_6EgshjIkZ6jOvKKtQbScWpahA0U/edit
+
+16. https://drive.google.com/file/d/1fAiQTN-KpsWq2J8gUSaYrzZnF8FXbhUF/view?usp=share_link
+
